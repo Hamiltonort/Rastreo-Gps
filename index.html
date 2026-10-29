@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>K-9 Track Bogotá Elite - Sistema Inteligente de Rastreo</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --accent: #f97316;
+            --danger: #ef4444;
+            --police: #1e3a8a;
+            --success: #22c55e;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --border-radius: 16px;
+        }
+
+        [data-theme="dark"] {
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, button { font-family: 'Inter', system-ui, sans-serif; }
+        body, .phone-container, .pet-pill, .quick-card, .audit-log, .timeline-content, .modal-card, .bottom-nav, .icon-btn { transition: background-color .3s, color .3s, border-color .3s; }
+        :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+        .avatar { display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 700; }
+        .pet-pill, .quick-card { font-family: inherit; text-align: left; }
+        [data-theme="dark"] .timeline-icon, [data-theme="dark"] .modal-icon { background: rgba(59,130,246,.2); }
+        [data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9); }
+        .pet-pin { display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%; color:#fff; border:3px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.35); font-size:14px; }
+        @media (max-width: 480px) {
+            body { padding: 0; align-items: stretch; }
+            .phone-container { max-width: none; height: 100dvh; border: none; border-radius: 0; box-shadow: none; }
+            .phone-notch { display: none; }
+            .toast-container { top: 12px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .phone-container {
+            width: 100%;
+            max-width: 410px;
+            height: 840px;
+            background: var(--card-bg);
+            border-radius: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            border: 8px solid #0f172a;
+        }
+
+        .phone-notch {
+            background: #0f172a;
+            height: 28px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 24px;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 2000;
+        }
+
+        /* Notificaciones Toast */
+        .toast-container {
+            position: absolute;
+            top: 38px;
+            left: 15px;
+            right: 15px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(15, 23, 42, 0.95);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            pointer-events: auto;
+            animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1), fadeOut 0.3s ease-in 3.7s forwards;
+            border-left: 4px solid var(--accent);
+        }
+
+        .toast.success { border-left-color: var(--success); }
+        .toast.danger { border-left-color: var(--danger); }
+        .toast.police { border-left-color: #3b82f6; }
+
+        @keyframes slideDown {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(-10px); pointer-events: none; }
+        }
+
+        .screen-content {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .view {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            padding: 20px;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .view.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .user-greeting h1 {
+            font-size: 19px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .user-greeting p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .icon-btn {
+            background: var(--border-color);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-main);
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .pet-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+
+        .pet-pill {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .pet-pill.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .pet-card {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            border-radius: var(--border-radius);
+            padding: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pet-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        .pet-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .pet-details h3 { font-size: 17px; font-weight: 700; }
+        .pet-details p { font-size: 12px; opacity: 0.9; }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid rgba(134, 239, 172, 0.3);
+        }
+
+        .status-badge.danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border-color: rgba(252, 165, 165, 0.3);
+        }
+
+        .emergency-btn {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: var(--border-radius);
+            font-weight: 700;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            box-shadow: 0 8px 16px -4px rgba(239, 68, 68, 0.4);
+            margin-bottom: 12px;
+        }
+
+        .police-btn {
+            background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 12px;
+            border-radius: var(--border-radius);
+            font-weight: 700;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+            box-shadow: 0 8px 16px -4px rgba(30, 58, 138, 0.4);
+            margin-bottom: 16px;
+            border: 1px solid #3b82f6;
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-main);
+        }
+
+        .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .quick-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 14px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .quick-card i { font-size: 20px; color: var(--primary); }
+        .quick-card h4 { font-size: 13px; font-weight: 600; color: var(--text-main); }
+        .quick-card span { font-size: 11px; color: var(--text-muted); }
+
+        #bogota-map {
+            width: 100%;
+            height: 320px;
+            border-radius: var(--border-radius);
+            margin-bottom: 12px;
+            border: 2px solid var(--border-color);
+            z-index: 1;
+        }
+
+        .map-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .btn-action {
+            flex: 1;
+            padding: 10px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-outline { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color); }
+
+        .audit-log {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 12px;
+            max-height: 100px;
+            overflow-y: auto;
+            color: var(--text-muted);
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 10px;
+            padding-bottom: 14px;
+            position: relative;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 14px;
+            top: 22px;
+            bottom: 0;
+            width: 2px;
+            background: var(--border-color);
+        }
+
+        .timeline-icon {
+            width: 30px; height: 30px;
+            border-radius: 50%; background: #dbeafe; color: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; flex-shrink: 0; z-index: 2;
+        }
+
+        .timeline-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 10px 14px;
+            border-radius: 10px; flex: 1;
+        }
+
+        .timeline-content h5 { font-size: 12px; font-weight: 700; color: var(--text-main); }
+        .timeline-content p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+        /* Simulador de Cámara QR / Rescatista */
+        .camera-viewfinder {
+            width: 100%;
+            height: 340px;
+            background: #0f172a;
+            border-radius: var(--border-radius);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 16px;
+            border: 2px solid var(--primary);
+        }
+
+        .scanner-box {
+            width: 200px;
+            height: 200px;
+            border: 2px dashed #38bdf8;
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            animation: pulseScanner 2s infinite;
+        }
+
+        @keyframes pulseScanner {
+            0% { border-color: #38bdf8; box-shadow: 0 0 0 rgba(56,189,248,0); }
+            50% { border-color: #22c55e; box-shadow: 0 0 20px rgba(34,197,94,0.4); }
+            100% { border-color: #38bdf8; box-shadow: 0 0 0 rgba(56,189,248,0); }
+        }
+
+        .scanner-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: scanLine 2s linear infinite;
+        }
+
+        @keyframes scanLine {
+            0% { top: 0; }
+            50% { top: 100%; }
+            100% { top: 0; }
+        }
+
+        .bottom-nav {
+            height: 65px;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 10px;
+            z-index: 1000;
+        }
+
+        .nav-item {
+            background: none; border: none;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            cursor: pointer; color: var(--text-muted); font-size: 10px; font-weight: 500;
+        }
+
+        .nav-item i { font-size: 18px; }
+        .nav-item.active { color: var(--primary); }
+
+        .modal-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 4000;
+            padding: 20px;
+        }
+
+        .modal-card {
+            background: var(--card-bg);
+            width: 100%;
+            border-radius: var(--border-radius);
+            padding: 22px;
+            text-align: center;
+        }
+
+        .modal-icon {
+            width: 56px; height: 56px;
+            background: #dbeafe; color: var(--primary);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 24px; margin: 0 auto 14px;
+        }
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+        .stat{background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:10px 6px;text-align:center}
+        .stat b{display:block;font-size:17px;font-weight:700;color:var(--primary)}
+        .stat span{font-size:10px;color:var(--text-muted)}
+        .act{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border-color);font-size:12px}
+        .act:last-child{border-bottom:none}
+        .act i{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(59,130,246,.15);color:var(--primary);font-size:12px;flex-shrink:0}
+        .act.danger i{background:rgba(239,68,68,.15);color:var(--danger)}
+        .act.success i{background:rgba(34,197,94,.15);color:var(--success)}
+        .act small{display:block;color:var(--text-muted);font-size:10px}
+        .radius-box{background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:12px}
+        .radius-box input{width:100%;accent-color:var(--primary);margin-top:6px}
+        .health-actions{display:flex;gap:8px;margin-top:6px}
+        .app-foot{text-align:center;font-size:10px;color:var(--text-muted);margin:14px 0 4px}
+    </style>
+</head>
+<body data-theme="light">
+
+    <div class="phone-container">
+        <div class="toast-container" id="toastContainer"></div>
+
+        <div class="phone-notch">
+            <span id="notchClock">9:41</span>
+            <span><i class="fa-solid fa-signal"></i> <i class="fa-solid fa-wifi"></i> <i class="fa-solid fa-battery-full"></i></span>
+        </div>
+
+        <div class="screen-content">
+            
+            <!-- VISTA 1: INICIO PRO -->
+            <div id="view-home" class="view active">
+                <div class="app-header">
+                    <div class="user-greeting">
+                        <h1>Hola, Adrian </h1>
+                        <p>Bogotá D.C. • Red de Apoyo Activa</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="icon-btn" onclick="toggleTheme()" title="Cambiar tema" aria-label="Cambiar tema"><i class="fa-solid fa-moon" id="themeIcon"></i></button>
+                        <div class="avatar" style="width:36px;height:36px;font-size:14px;background:var(--primary);color:white;">AD</div>
+                    </div>
+                </div>
+
+                <div class="pet-selector">
+                    <div role="button" tabindex="0" class="pet-pill active" id="pill-loki" onclick="selectPet('loki')">
+                        <i class="fa-solid fa-dog"></i> Coco (Canino)
+                    </div>
+                    <div role="button" tabindex="0" class="pet-pill" id="pill-kira" onclick="selectPet('kira')">
+                        <i class="fa-solid fa-cat"></i> Cielo (Felino)
+                    </div>
+                </div>
+
+                <div class="pet-card">
+                    <div class="pet-info">
+                        <img src="https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=150" alt="Mascota" class="pet-avatar" id="petAvatar" onerror="this.onerror=null;this.src=FALLBACK">
+                        <div class="pet-details">
+                            <h3 id="petName">Coco</h3>
+                            <p id="petBreed">Criollo (13 años) • Chip #K9-8821</p>
+                            <span class="status-badge" id="home-status-badge"><i class="fa-solid fa-shield-halved"></i> Zona Segura Activa</span>
+                        </div>
+                    </div>
+                    <div style="font-size: 11px; background: rgba(255,255,255,0.15); padding: 6px 10px; border-radius: 6px; display: flex; justify-content: space-between;">
+                        <span>Conexión: PostGIS / WebSocket</span>
+                        <span>Batería QR: 100% Pasiva</span>
+                    </div>
+                </div>
+
+                <button class="emergency-btn" id="emergencyBtn" onclick="triggerEmergency()">
+                    <i class="fa-solid fa-triangle-exclamation fa-shake"></i> ¡Reportar Extravío Inmediato!
+                </button>
+
+                <button class="police-btn" onclick="triggerPoliceAlert()">
+                    <i class="fa-solid fa-shield-halved"></i> Alerta a Policía / Cuadrante CAI Bogotá
+                </button>
+
+                <div class="stats">
+                    <div class="stat"><b>2</b><span>Mascotas protegidas</span></div>
+                    <div class="stat"><b>1.248</b><span>Vecinos en la red</span></div>
+                    <div class="stat"><b id="statScans">0</b><span>Escaneos de placa</span></div>
+                </div>
+
+                <div class="section-title">Módulos Estratégicos (MVP)</div>
+
+                <div class="quick-grid">
+                    <div role="button" tabindex="0" class="quick-card" onclick="switchView('map')">
+                        <i class="fa-solid fa-map-location-dot"></i>
+                        <h4>Mapa Bogotá</h4>
+                        <span>PostGIS & Leaflet</span>
+                    </div>
+                    <div role="button" tabindex="0" class="quick-card" onclick="switchView('health')">
+                        <i class="fa-solid fa-notes-medical"></i>
+                        <h4>Salud & Carné</h4>
+                        <span>Multi-rol verificado</span>
+                    </div>
+                    <div role="button" tabindex="0" class="quick-card" onclick="switchView('qr')">
+                        <i class="fa-solid fa-qrcode"></i>
+                        <h4>Escanear Placa QR</h4>
+                        <span>Simular Cámara Celular</span>
+                    </div>
+                    <div role="button" tabindex="0" class="quick-card" onclick="showToast('Sincronización FCM exitosa con Firebase.', 'success')">
+                        <i class="fa-solid fa-bell"></i>
+                        <h4>Alertas Push</h4>
+                        <span>Recordatorios auto</span>
+                    </div>
+                </div>
+
+                <div class="section-title">Actividad reciente</div>
+                <div id="activityList" aria-live="polite"></div>
+                <p class="app-foot">K-9 Track Bogotá Elite • Prototipo v1.0</p>
+            </div>
+
+            <!-- VISTA 2: MAPA -->
+            <div id="view-map" class="view">
+                <div class="app-header">
+                    <div class="user-greeting">
+                        <h1>Rastreo Geoespacial</h1>
+                        <p>Bogotá (Chapinero / Usaquén)</p>
+                    </div>
+                    <button class="btn-outline" style="padding: 4px 10px; border-radius: 8px; font-size: 11px;" onclick="switchView('home')">Volver</button>
+                </div>
+
+                <div id="bogota-map"></div>
+
+                <div class="map-controls">
+                    <button class="btn-action btn-primary" onclick="simulatePing()"><i class="fa-solid fa-satellite-dish"></i> Simular Ping GPS</button>
+                    <button class="btn-action btn-outline" onclick="centerBogota()"><i class="fa-solid fa-location-crosshairs"></i> Centrar</button>
+                </div>
+
+                <div class="radius-box">
+                    <label for="radiusRange">Radio de geocerca: <b id="radiusLabel">800 m</b></label>
+                    <input type="range" id="radiusRange" min="400" max="2000" step="100" value="800" oninput="setRadius(this.value)">
+                </div>
+
+                <div class="section-title" style="font-size: 13px;">Bitácora de Coordenadas en Vivo</div>
+                <div class="audit-log" id="auditLog">
+                    [09:41:00] Sistema inicializado en base de datos PostGIS.<br>
+                    [09:41:05] Perímetro de geocerca de 800m activo.
+                </div>
+            </div>
+
+            <!-- VISTA 3: SALUD -->
+            <div id="view-health" class="view">
+                <div class="app-header">
+                    <div class="user-greeting">
+                        <h1>Historial Clínico</h1>
+                        <p>Dr. Javier Mendoza • Vet. Verificada</p>
+                    </div>
+                    <button class="btn-outline" style="padding: 4px 10px; border-radius: 8px; font-size: 11px;" onclick="switchView('home')">Volver</button>
+                </div>
+
+                <div style="background: rgba(37, 99, 235, 0.1); border: 1px solid var(--primary); padding: 10px; border-radius: 10px; margin-bottom: 14px; font-size: 11px; color: var(--primary);">
+                    <i class="fa-solid fa-circle-check"></i> <strong>Credencial Digital Válida:</strong> Aceptada en guarderías de Bogotá.
+                </div>
+
+                <div class="section-title">Línea de Tiempo Verificada</div>
+
+                <div id="timeline"></div>
+                <div class="health-actions">
+                    <button class="btn-action btn-primary" onclick="bookVet()"><i class="fa-solid fa-calendar-check"></i> Agendar cita</button>
+                    <button class="btn-action btn-outline" onclick="shareCard()"><i class="fa-solid fa-share-nodes"></i> Compartir carné</button>
+                </div>
+            </div>
+
+            <!-- VISTA 4: ESCANEO REAL DE PLACA QR (CÁMARA SIMULADA) -->
+            <div id="view-qr" class="view">
+                <div class="app-header">
+                    <div class="user-greeting">
+                        <h1>Escáner Smart QR</h1>
+                        <p>Cámara de Transeúnte / Rescatista</p>
+                    </div>
+                    <button class="btn-outline" style="padding: 4px 10px; border-radius: 8px; font-size: 11px;" onclick="switchView('home')">Volver</button>
+                </div>
+
+                <div class="camera-viewfinder">
+                    <div style="position: absolute; top: 12px; color: white; font-size: 12px; font-weight: 500;">
+                        <i class="fa-solid fa-camera"></i> Apunte al código de la placa QR
+                    </div>
+                    <div class="scanner-box">
+                        <div class="scanner-line"></div>
+                        <i class="fa-solid fa-qrcode" style="font-size: 64px; color: rgba(255,255,255,0.2);"></i>
+                    </div>
+                    <div style="position: absolute; bottom: 12px; color: #38bdf8; font-size: 11px;">
+                        Buscando señal de microchip...
+                    </div>
+                </div>
+
+                <button class="btn-action btn-primary" style="width: 100%; padding: 14px;" onclick="executeScanResult()">
+                    <i class="fa-solid fa-bolt"></i> Simular Lectura Exitosa de Placa
+                </button>
+            </div>
+
+            <!-- VISTA 5: RESULTADO PARA EL RESCATISTA (¡ENCONTRADO!) -->
+            <div id="view-found" class="view">
+                <div class="app-header">
+                    <div class="user-greeting">
+                        <h1>Mascota Encontrada</h1>
+                        <p>Portal web PWA del Rescatista</p>
+                    </div>
+                    <button class="btn-outline" style="padding: 4px 10px; border-radius: 8px; font-size: 11px;" onclick="switchView('home')">Volver</button>
+                </div>
+
+                <div style="background: var(--card-bg); border: 2px dashed var(--success); padding: 18px; border-radius: var(--border-radius); text-align: center; margin-bottom: 14px;">
+                    <i class="fa-solid fa-paw" style="font-size: 28px; color: var(--success); margin-bottom: 6px;"></i>
+                    <h3 style="font-size: 15px; font-weight: 700;" id="foundTitle">¡Hola! He encontrado a Coco.</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Tus coordenadas GPS acaban de enviarse por WebSocket al celular de Adrian en Bogotá.</p>
+                    
+                    <div id="allergyBox" style="margin:12px 0;padding:8px;border-radius:6px;font-size:11px;font-weight:600;"></div>
+
+                    <button class="btn-action btn-primary" style="width: 100%; margin-top: 8px; background: var(--success);" onclick="showToast('Llamada cifrada establecida con Adrian (Dueño).', 'success')">
+                        <i class="fa-solid fa-phone-volume"></i> Llamar a Adrian (Dueño)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Emergencia Extravío -->
+            <div id="emergency-modal" class="modal-overlay" role="dialog" aria-modal="true">
+                <div class="modal-card">
+                    <div class="modal-icon"><i class="fa-solid fa-satellite-dish fa-bounce"></i></div>
+                    <h3 style="font-size: 16px; margin-bottom: 6px;">¡Alerta FCM Activada!</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Se transmitió la emergencia por WebSockets a la red comunitaria en Bogotá.</p>
+                    <button class="btn-action btn-primary" style="width: 100%;" onclick="closeEmergencyModal()">Ver Mapa de Rastreo</button>
+                </div>
+            </div>
+
+            <!-- Modal Alerta Policía / CAI -->
+            <div id="police-modal" class="modal-overlay" role="dialog" aria-modal="true">
+                <div class="modal-card">
+                    <div class="modal-icon" style="background: #dbeafe; color: #1e3a8a;"><i class="fa-solid fa-shield-halved fa-beat"></i></div>
+                    <h3 style="font-size: 16px; margin-bottom: 6px;">¡Alerta de Hurto / Extravío a Policía!</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Se ha emitido un reporte geolocalizado al cuadrante de Policía Metropolitana de Bogotá (CAI más cercano).</p>
+                    <button class="btn-action btn-primary" style="width: 100%; background: #1e3a8a;" onclick="closePoliceModal()">Aceptar y Monitorear CAI</button>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="bottom-nav">
+            <button class="nav-item active" id="nav-home" onclick="switchView('home')"><i class="fa-solid fa-house"></i><span>Inicio</span></button>
+            <button class="nav-item" id="nav-map" onclick="switchView('map')"><i class="fa-solid fa-map"></i><span>Mapa</span></button>
+            <button class="nav-item" id="nav-health" onclick="switchView('health')"><i class="fa-solid fa-book-medical"></i><span>Salud</span></button>
+            <button class="nav-item" id="nav-qr" onclick="switchView('qr')"><i class="fa-solid fa-qrcode"></i><span>Escanear</span></button>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        const HOME = [4.6584, -74.0939], POLICE = [4.6620, -74.0990];
+        let RADIUS = 800, geofence = null, scans = 0;
+        const activity = [{i:"fa-syringe",t:"success",m:"Vacuna antirrábica de Coco registrada",w:"Ago 2026"},{i:"fa-shield-halved",t:"",m:"Zona segura activada",w:"Ago 2026"}];
+        const FALLBACK = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60"><rect width="60" height="60" fill="#93c5fd"/><text x="30" y="40" font-size="28" text-anchor="middle">🐾</text></svg>');
+        let map = null, petMarker = null, policeMarker = null, currentPet = 'loki';
+
+        const petsData = {
+            loki: { name: 'Coco', breed: 'Criollo (13 años) • Chip #K9-8821', avatar: 'Coco.png', lost: false, pos: [...HOME], allergy: 'Sensible a penicilina.',
+                health: [['fa-syringe', 'Vacuna Antirrábica Anual', 'Aplicada por Clínica El Parque.', 'Fecha:', '12 Ago 2026'], ['fa-pills', 'Desparasitación Preventiva', 'Control periódico automatizado.', 'Próxima:', '15 Ene 2027']] },
+            kira: { name: 'Cielo', breed: 'Gato Siamés (7 años) • Chip #K9-9942', avatar: 'Cielo.png', lost: false, pos: [...HOME], allergy: null,
+                health: [['fa-syringe', 'Vacuna Triple Felina', 'Aplicada por Clínica El Parque.', 'Fecha:', '03 Jun 2026'], ['fa-pills', 'Desparasitación Preventiva', 'Control periódico automatizado.', 'Próxima:', '20 Ene 2027']] }
+        };
+        const $ = id => document.getElementById(id);
+        const clock = () => new Date().toLocaleTimeString('es-CO', { hour12: false });
+
+        function petIcon() {
+            const p = petsData[currentPet];
+            return L.divIcon({ className: '', iconSize: [34, 34], iconAnchor: [17, 17],
+                html: `<div class="pet-pin" style="background:${p.lost ? '#ef4444' : '#22c55e'}"><i class="fa-solid ${currentPet === 'kira' ? 'fa-cat' : 'fa-dog'}"></i></div>` });
+        }
+        function popupHtml() {
+            const p = petsData[currentPet];
+            return p.lost ? `<b>Última ubicación de ${p.name}</b><br>Alerta activa` : `<b>${p.name} está aquí</b><br>Zona Segura Bogotá`;
+        }
+
+        function renderPet() {
+            const p = petsData[currentPet];
+            $('petName').textContent = p.name;
+            $('petBreed').textContent = p.breed;
+            $('petAvatar').src = p.avatar;
+            $('foundTitle').textContent = `¡Hola! He encontrado a ${p.name}.`;
+            const badge = $('home-status-badge');
+            badge.className = 'status-badge' + (p.lost ? ' danger' : '');
+            badge.innerHTML = p.lost ? '<i class="fa-solid fa-triangle-exclamation"></i> ¡EXTRAVIADO!' : '<i class="fa-solid fa-shield-halved"></i> Zona Segura Activa';
+            $('emergencyBtn').innerHTML = p.lost ? '<i class="fa-solid fa-circle-check"></i> Ya apareció: cancelar alerta' : '<i class="fa-solid fa-triangle-exclamation fa-shake"></i> ¡Reportar Extravío Inmediato!';
+            $('timeline').innerHTML = p.health.map(h => `<div class="timeline-item"><div class="timeline-icon"><i class="fa-solid ${h[0]}"></i></div><div class="timeline-content"><h5>${h[1]}</h5><p>${h[2]}<br><strong>${h[3]}</strong> ${h[4]}</p></div></div>`).join('');
+            const a = $('allergyBox');
+            a.style.cssText += p.allergy ? ';background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--danger)' : ';background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:var(--success)';
+            a.innerHTML = p.allergy ? `<i class="fa-solid fa-triangle-exclamation"></i> Alergia: ${p.allergy}` : '<i class="fa-solid fa-circle-check"></i> Sin alergias conocidas.';
+            if (petMarker) petMarker.setIcon(petIcon()).setLatLng(p.pos).setPopupContent(popupHtml());
+        }
+
+        function selectPet(key) {
+            currentPet = key;
+            document.querySelectorAll('.pet-pill').forEach(p => p.classList.remove('active'));
+            $('pill-' + key).classList.add('active');
+            renderPet();
+            showToast(`Perfil cambiado a ${petsData[key].name}.`, 'success');
+        }
+
+        function showToast(message, type = '') {
+            const icons = { success: 'fa-circle-check', danger: 'fa-triangle-exclamation', police: 'fa-shield-halved', '': 'fa-circle-info' };
+            const c = $('toastContainer');
+            while (c.children.length >= 3) c.firstChild.remove();
+            const t = document.createElement('div');
+            t.className = `toast ${type}`;
+            t.setAttribute('role', 'status');
+            t.innerHTML = `<i class="fa-solid ${icons[type] || icons['']}"></i>`;
+            const sp = document.createElement('span'); sp.textContent = message; t.appendChild(sp);
+            c.appendChild(t);
+            setTimeout(() => t.remove(), 4000);
+        }
+
+        function applyTheme(mode, silent) {
+            document.body.setAttribute('data-theme', mode);
+            $('themeIcon').className = mode === 'dark' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+            if (!silent) showToast(mode === 'dark' ? 'Modo nocturno activado para paseos.' : 'Modo claro activado.');
+        }
+        function toggleTheme() { applyTheme(document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+
+        function switchView(name) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('active'); n.removeAttribute('aria-current'); });
+            $('view-' + name).classList.add('active');
+            const nav = $('nav-' + (name === 'found' ? 'qr' : name));
+            if (nav) { nav.classList.add('active'); nav.setAttribute('aria-current', 'page'); }
+            document.querySelector('.screen-content').scrollTop = 0;
+            if (name === 'map') {
+                if (!map) setTimeout(initMap, 200);
+                else setTimeout(() => map.invalidateSize(), 50);
+            }
+        }
+
+        function initMap() {
+            if (map) return;
+            map = L.map('bogota-map').setView(HOME, 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(map);
+            geofence = L.circle(HOME, { color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.15, radius: RADIUS }).addTo(map);
+            petMarker = L.marker(petsData[currentPet].pos, { icon: petIcon() }).addTo(map).bindPopup(popupHtml()).openPopup();
+        }
+
+        function centerBogota() { if (map) map.setView(HOME, 13); }
+
+        function simulatePing() {
+            if (!map || !petMarker) { showToast('Espera a que cargue el mapa.'); return; }
+            const p = petsData[currentPet];
+            p.pos = [HOME[0] + (Math.random() - 0.5) * 0.015, HOME[1] + (Math.random() - 0.5) * 0.015];
+            petMarker.setLatLng(p.pos);
+            map.setView(p.pos, 14);
+            const d = Math.round(map.distance(HOME, p.pos)), out = d > RADIUS;
+            if (out) addActivity('fa-location-dot', 'danger', `${p.name} salió de la geocerca (${d} m)`);
+            const log = $('auditLog');
+            log.innerHTML = `[${clock()}] ${p.name}: ${p.pos[0].toFixed(4)}, ${p.pos[1].toFixed(4)} • ${d} m del hogar ${out ? '⚠ FUERA de geocerca' : '(dentro de geocerca)'}<br>` + log.innerHTML;
+            showToast(out ? `${p.name} salió de la zona segura (${d} m).` : 'Nueva coordenada GPS recibida en tiempo real.', out ? 'danger' : 'success');
+        }
+
+        let scanning = false;
+        function executeScanResult() {
+            if (scanning) return;
+            scanning = true;
+            showToast('Leyendo placa QR…');
+            setTimeout(() => {
+                showToast('¡Placa escaneada con éxito! Transmitiendo GPS...', 'success');
+                scans++; addActivity('fa-qrcode', 'success', `Placa de ${petsData[currentPet].name} escaneada por un rescatista`);
+                switchView('found');
+                scanning = false;
+            }, 1200);
+        }
+
+        function triggerEmergency() {
+            const p = petsData[currentPet];
+            if (p.lost) {
+                p.lost = false; renderPet();
+                showToast(`Alerta cancelada: ${p.name} está a salvo.`, 'success');
+                addActivity('fa-circle-check', 'success', `${p.name} está a salvo, alerta cancelada`);
+                return;
+            }
+            p.lost = true; renderPet();
+            $('emergency-modal').style.display = 'flex';
+            showToast('¡Alerta Push FCM masiva disparada!', 'danger');
+            addActivity('fa-triangle-exclamation', 'danger', `Alerta de extravío: ${p.name}`);
+        }
+        function closeEmergencyModal() { $('emergency-modal').style.display = 'none'; switchView('map'); }
+
+        function triggerPoliceAlert() {
+            $('police-modal').style.display = 'flex';
+            showToast('¡Alerta emitida al CAI de Policía de Bogotá!', 'police');
+            addActivity('fa-shield-halved', '', `Reporte enviado al CAI por ${petsData[currentPet].name}`);
+        }
+        function closePoliceModal() {
+            $('police-modal').style.display = 'none';
+            switchView('map');
+            setTimeout(() => {
+                if (!map) return;
+                if (!policeMarker) {
+                    policeMarker = L.marker(POLICE, { icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14],
+                        html: '<div style="background:#1e3a8a;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.3);font-size:12px;"><i class="fa-solid fa-shield-halved"></i></div>' }) })
+                        .addTo(map).bindPopup('<b>CAI Policía Metropolitana</b><br>Notificado de alerta de mascota.');
+                }
+                map.setView(POLICE, 14);
+            }, 350);
+        }
+
+        function addActivity(i, t, m) {
+            activity.unshift({ i, t, m, w: 'Hoy ' + clock().slice(0, 5) });
+            activity.length = Math.min(activity.length, 5);
+            renderActivity();
+        }
+        function renderActivity() {
+            $('activityList').innerHTML = activity.map(a => `<div class="act ${a.t}"><i class="fa-solid ${a.i}"></i><div>${a.m}<small>${a.w}</small></div></div>`).join('');
+            $('statScans').textContent = scans;
+        }
+        function setRadius(v) {
+            RADIUS = +v;
+            $('radiusLabel').textContent = RADIUS + ' m';
+            if (geofence) geofence.setRadius(RADIUS);
+        }
+        function bookVet() {
+            showToast('Cita solicitada con Clínica El Parque.', 'success');
+            addActivity('fa-calendar-check', 'success', `Cita solicitada para ${petsData[currentPet].name}`);
+        }
+        async function shareCard() {
+            const p = petsData[currentPet];
+            const txt = `Carné de salud de ${p.name} (${p.breed}) - K-9 Track Bogotá Elite`;
+            try {
+                if (navigator.share) await navigator.share({ title: 'Carné de salud', text: txt });
+                else { await navigator.clipboard.writeText(txt); showToast('Carné copiado al portapapeles.', 'success'); }
+            } catch (e) { /* cancelado por el usuario */ }
+        }
+        setInterval(() => { $('notchClock').textContent = clock().slice(0, 5); }, 30000);
+        $('notchClock').textContent = clock().slice(0, 5);
+
+        document.addEventListener('keydown', e => {
+            if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button]')) { e.preventDefault(); e.target.click(); }
+            if (e.key === 'Escape') {
+                if ($('emergency-modal').style.display === 'flex') closeEmergencyModal();
+                else if ($('police-modal').style.display === 'flex') closePoliceModal();
+            }
+        });
+
+        applyTheme(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light', true);
+        renderPet();
+        renderActivity();
+    </script>
+</body>
+</html>
